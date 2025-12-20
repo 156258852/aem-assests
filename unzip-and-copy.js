@@ -9,9 +9,9 @@ const AdmZip = require('adm-zip');
  */
 function parseFilterItem(filterItem) {
   // 如果是标签格式，如 <filter root="/apps/my-project"/>
-  if (filterItem.startsWith('<filter') && filterItem.includes('root="')) {
-    // 提取root属性的值
-    const match = filterItem.match(/root="([^"]+)"/);
+  if (filterItem.startsWith('<filter')) {
+    // 提取root属性的值，支持单引号和双引号
+    const match = filterItem.match(/root\s*=\s*["']([^"']+)["']/);
     if (match && match[1]) {
       return match[1].replace(/^\/+/, ''); // 移除前导斜杠
     }
