@@ -1,0 +1,20 @@
+{
+  "name": "aem-assests",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "adm-zip": "^0.5.10",
+    "fs-extra": "^11.1.1",
+    "fast-glob": "^3.3.2",
+    "picomatch": "^2.3.1",
+    "minimist": "^1.2.8"
+  }
+}
