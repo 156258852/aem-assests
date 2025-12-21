@@ -99,3 +99,40 @@ if (success5) {
 } else {
   console.log('操作失败，请检查错误信息\n');
 }
+
+// 示例6: 演示删除项目中的文件或目录
+console.log('示例6: 演示删除项目中的文件或目录');
+// 创建一个测试项目目录结构
+const testProjectDir2 = './test-project-delete';
+if (!fs.existsSync(testProjectDir2)) {
+  fs.mkdirSync(testProjectDir2, { recursive: true });
+}
+
+// 在项目中创建一些文件和目录用于删除测试
+const deleteDir = './test-project-delete/content/dam/sample';
+if (!fs.existsSync(deleteDir)) {
+  fs.mkdirSync(deleteDir, { recursive: true });
+}
+
+// 创建一个要删除的文件
+const deleteFile = './test-project-delete/content/dam/sample/test.txt';
+fs.writeFileSync(deleteFile, '// 这是一个要被删除的文件');
+
+console.log('已创建测试用的项目和要删除的文件:', deleteFile);
+
+// 现在执行删除操作
+const zipPath6 = './example-aem-package.zip';
+const projectPath6 = './test-project-delete';
+// 配置filter，指定要删除的路径
+const filterPaths6 = [
+  '/apps/my-project',                           // 正常复制的路径
+  ['/content/dam/sample', {type: 'deleted'}]   // 要删除的路径
+];
+
+const success6 = unzipAndCopyByFilter(zipPath6, projectPath6, filterPaths6);
+
+if (success6) {
+  console.log('文件已成功从jcr_root目录复制到项目路径，并删除了指定的文件/目录\n');
+} else {
+  console.log('操作失败，请检查错误信息\n');
+}

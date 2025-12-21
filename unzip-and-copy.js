@@ -3,42 +3,74 @@ const path = require('path');
 const AdmZip = require('adm-zip');
 
 /**
- * 解析filter配置，支持标签和纯路径
- * @param {string} filterItem - filter数组中的单个元素（可能是标签或纯路径）
- * @returns {string} 解析后的路径
+ * 标准化filter配置项为统一格式
+ * @param {string|Array} filterItem - filter数组中的单个元素
+ * @returns {Array} 标准化后的数组格式 [path, options]
  */
-function parseFilterItem(filterItem) {
-  // 如果是标签格式，如 <filter root="/apps/my-project"/>
-  if (filterItem.startsWith('<filter')) {
-    // 提取root属性的值，支持单引号和双引号
-    const match = filterItem.match(/root\s*=\s*["']([^"']+)["']/);
-    if (match && match[1]) {
-      return match[1].replace(/^\/+/, ''); // 移除前导斜杠
-    }
+function normalizeFilterItem(filterItem) {
+  // 如果已经是数组格式，直接返回
+  if (Array.isArray(filterItem)) {
+    return filterItem;
   }
   
-  // 如果是纯路径格式，直接返回（移除前导斜杠）
-  return filterItem.replace(/^\/+/, '');
+  // 如果是字符串格式，转换为数组格式 [path, options]
+  return [filterItem, {}];
 }
 
 /**
- * 棟能文件路径是否匹配filter规则
- * @param {string} filePath - 文件路径
- * @param {Array} filterPaths - filter路径数组
- * @returns {boolean} 是否匹配
+ * 解析filter路径，支持标签和纯路径格式
+ * @param {string} path - 路径字符串（可能是标签或纯路径）
+ * @returns {string} 解析后的路径
  */
-function isPathMatchFilter(filePath, filterPaths) {
-  // 解析所有filter项
-  const parsedFilterPaths = filterPaths.map(parseFilterItem);
+function parsePath(path) {
+  // 如果是标签格式，如 <filter root="/apps/my-project"/>
+  if (typeof path === 'string' && path.startsWith('<filter')) {
+    // 提取root属性的值，支持单引号和双引号
+    const match = path.match(/root\s*=\s*["']([^"']+)["']/);
+    if (match && match[1]) {
+      return match[1];
+    }
+  }
+  // 如果是纯路径格式，直接返回
+  return typeof path === 'string' ? path : '';
+}
+
+/**
+ * 解析filter配置项
+ * @param {string|Array} filterItem - filter数组中的单个元素
+ * @returns {Object} 解析后的路径和操作类型 {path: string, type: string}
+ */
+function parseFilterItem(filterItem) {
+  // 标准化为数组格式
+  const [path, options = {}] = normalizeFilterItem(filterItem);
+  const { type = 'copy' } = options;
   
-  return parsedFilterPaths.some(filterPath => {
-    // 移除可能的前导斜杠进行比较
-    const normalizedFilePath = filePath.replace(/^\/+/, '');
-    const normalizedFilterPath = filterPath.replace(/^\/+/, '');
-    
-    // 检查是否以filter路径开头
-    return normalizedFilePath.startsWith(normalizedFilterPath);
-  });
+  // 解析路径
+  const parsedPath = parsePath(path);
+  
+  return {
+    path: parsedPath,
+    type: type // 'copy' 或 'deleted'
+  };
+}
+
+/**
+ * 检查文件路径是否匹配filter规则
+ * @param {string} filePath - 文件路径（相对于jcr_root的路径，不包含开头的/）
+ * @param {Array} filters - 解析后的filter对象数组
+ * @returns {Object|null} 匹配的filter对象或null
+ */
+function getMatchingFilter(filePath, filters) {
+ 
+  for (const filter of filters) {
+    const filterPath = filter.path.replace(/^\/+/, '');
+    if (filePath === filterPath || 
+        filePath.startsWith(filterPath + '/')) {
+      return filter;
+    }
+  }
+  
+  return null;
 }
 
 /**
@@ -85,7 +117,7 @@ async function unzipAndCopyByFilter(zipFilePath, projectPath, filterPaths, clean
     let copiedFiles = 0;
 
     // 解析所有filter路径
-    const parsedFilterPaths = filterPaths.map(parseFilterItem);
+    const parsedFilters = filterPaths.map(parseFilterItem);
 
     // 遍历jcr_root中的所有文件和目录
     const allItems = getAllFilesRecursive(jcrRootPath);
@@ -95,26 +127,38 @@ async function unzipAndCopyByFilter(zipFilePath, projectPath, filterPaths, clean
       const relativePath = path.relative(jcrRootPath, sourcePath);
       
       // 检查该路径是否匹配任何filter规则
-      if (isPathMatchFilter(relativePath, parsedFilterPaths)) {
+      const matchingFilter = getMatchingFilter(relativePath, parsedFilters);
+      
+      if (matchingFilter) {
         // 构建目标路径
         const destinationPath = path.join(projectPath, relativePath);
         
         try {
-          // 确保目标目录存在
-          await fs.ensureDir(path.dirname(destinationPath));
-          
-          // 删除目标路径中已存在的文件或目录
-          if (fs.existsSync(destinationPath)) {
-            await fs.remove(destinationPath);
+          if (matchingFilter.type === 'deleted') {
+            // 删除操作：删除项目中对应的文件或目录
+            if (fs.existsSync(destinationPath)) {
+              await fs.remove(destinationPath);
+              console.log(`已删除项目中的文件/目录: ${destinationPath}`);
+            } else {
+              console.log(`项目中不存在要删除的文件/目录: ${destinationPath}`);
+            }
+          } else {
+            // 复制操作：确保目标目录存在
+            await fs.ensureDir(path.dirname(destinationPath));
+            
+            // 删除目标路径中已存在的文件或目录
+            if (fs.existsSync(destinationPath)) {
+              await fs.remove(destinationPath);
+            }
+            
+            // 复制文件或目录
+            await fs.copy(sourcePath, destinationPath);
+            
+            copiedFiles++;
+            console.log(`已复制 ${sourcePath} 到 ${destinationPath}`);
           }
-          
-          // 复制文件或目录
-          await fs.copy(sourcePath, destinationPath);
-          
-          copiedFiles++;
-          console.log(`已复制 ${sourcePath} 到 ${destinationPath}`);
-        } catch (copyError) {
-          console.error(`复制文件失败 ${sourcePath}: ${copyError.message}`);
+        } catch (error) {
+          console.error(`${matchingFilter.type === 'deleted' ? '删除' : '复制'}文件失败 ${sourcePath}: ${error.message}`);
         }
       }
     }

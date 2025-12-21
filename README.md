@@ -1,6 +1,7 @@
 # AEM Assets 解压和复制工具
 
 这个工具用于解压ZIP文件并将内容按照AEM filter规则复制到指定的项目路径，完成后会自动清理临时解压的文件。
+现在还支持根据filter配置删除项目中的文件或目录。
 
 ## 安装依赖
 
@@ -30,6 +31,9 @@ node unzip-and-copy.js ./aem-package.zip /path/to/your/project "<filter root=\"/
 
 # 使用 --no-cleanup 参数可保留临时解压的文件
 node unzip-and-copy.js ./aem-package.zip /path/to/your/project "/apps/my-project" --no-cleanup
+
+# 使用删除操作的filter配置
+node unzip-and-copy.js ./aem-package.zip /path/to/your/project "/apps/my-project" "[\"/content/dam/sample\", {\"type\": \"deleted\"}]"
 ```
 
 ### 在代码中使用
@@ -37,9 +41,6 @@ node unzip-and-copy.js ./aem-package.zip /path/to/your/project "/apps/my-project
 ```javascript
 const unzipAndCopyByFilter = require('./unzip-and-copy');
 
-// 使用纯路径格式的filter（默认清理临时文件）
-// 只处理jcr_root目录下的内容
-// 如果项目路径中已存在文件，则先删除再替换；如果不存在则直接创建
 unzipAndCopyByFilter('./aem-package.zip', '/path/to/your/project', ['/apps/my-project']);
 
 // 使用标签格式的filter
@@ -51,17 +52,20 @@ unzipAndCopyByFilter('./aem-package.zip', '/path/to/your/project', [
   '/etc/designs/my-project'
 ]);
 
-// 保留临时解压的文件
+// 使用删除操作的filter配置
+unzipAndCopyByFilter('./aem-package.zip', '/path/to/your/project', [
+  '/apps/my-project',                           // 正常复制的路径
+  ['/content/dam/sample', {type: 'deleted'}]   // 要删除的路径
+]);
+
 unzipAndCopyByFilter('./aem-package.zip', '/path/to/your/project', ['/apps/my-project'], false);
 ```
 
 ## AEM Filter 路径说明
 
-在AEM中，filter路径可以是以下两种格式：
+在AEM中，filter路径可以是以下几种格式：
 
 1. **纯路径格式**：
-   - `/apps/your-project-name`
-   - `/etc/designs/your-project-name`
    - `/content/dam/your-project-name`
 
 2. **标签格式**：
@@ -69,22 +73,14 @@ unzipAndCopyByFilter('./aem-package.zip', '/path/to/your/project', ['/apps/my-pr
    - `<filter root="/etc/designs/your-project-name"/>`
    - `<filter root="/content/dam/your-project-name"/>`
 
+3. **删除操作格式**：
+   - `['/content/dam/sample', {type: 'deleted'}]` - 删除项目中的指定路径
+
 常见的AEM filter路径包括：
 - `/apps/your-project-name` - 应用程序特定的组件和模板
-- `/etc/designs/your-project-name` - 设计相关文件
-- `/content/dam/your-project-name` - 数字资产管理
-- `/libs` - AEM内置库（通常不建议修改）
-
-该工具会根据提供的filter路径数组筛选ZIP文件中`jcr_root`目录下的内容，并将匹配的文件按照原有的相对路径结构复制到指定的项目路径中。默认情况下，工具会在完成复制后自动删除临时解压的文件。
-
-## 行为特点
-
-1. 只处理ZIP文件中`jcr_root`目录下的内容
-2. 如果项目路径中已存在同名文件或目录，会先删除再替换
-3. 如果项目路径中不存在相应文件或目录，会直接创建
-4. 保持原始ZIP文件中的目录结构
-5. 只复制匹配filter路径的文件
-6. 支持混合使用标签格式和纯路径格式的filter
+- `/etc/designs/your-project-name` - 项目的静态资源
+- `/content/dam/your-project-name` - 项目的数字资产
+- `/conf/your-project-name` - 项目的配置
 
 ## 注意事项
 
@@ -94,3 +90,4 @@ unzipAndCopyByFilter('./aem-package.zip', '/path/to/your/project', ['/apps/my-pr
 4. 只有匹配filter路径的文件才会被复制
 5. 默认只会处理`jcr_root`目录下的内容
 6. 默认会在完成后删除临时解压的文件，使用`--no-cleanup`参数可保留这些文件
+7. 删除操作只会影响项目中的文件和目录，不会影响ZIP包中的内容
