@@ -8,7 +8,7 @@ import { dirname } from 'path';
  */
 export const createGlobals = (metaUrl) => {
   const __filename = fileURLToPath(metaUrl);
-     const __dirname = dirname(__filename);
+  const __dirname = dirname(__filename);
   
   return {
     __filename,
