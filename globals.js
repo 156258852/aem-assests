@@ -6,8 +6,8 @@ import { dirname } from 'path';
  * @param {string} metaUrl - import.meta.url 的值
  * @returns {Object} 包含 __dirname 和 __filename 的对象
  */
-export const createGlobals = () => {
-  const __filename = fileURLToPath(import.meta.url);
+export const createGlobals = (metaUrl) => {
+  const __filename = fileURLToPath(metaUrl);
   const __dirname = dirname(__filename);
   
   return {
