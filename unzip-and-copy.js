@@ -114,51 +114,65 @@ async function unzipAndCopyByFilter(zipFilePath, projectPath, filterPaths, clean
       return false;
     }
 
-    let copiedFiles = 0;
-
     // 解析所有filter路径
     const parsedFilters = filterPaths.map(parseFilterItem);
+    
+    // 分离复制和删除操作的filter
+    const copyFilters = parsedFilters.filter(filter => filter.type !== 'deleted');
+    const deleteFilters = parsedFilters.filter(filter => filter.type === 'deleted');
+    
+    // 首先执行删除操作，删除目标项目中匹配删除规则的文件/目录
+    if (deleteFilters.length > 0) {
+      for (const deleteFilter of deleteFilters) {
+        // 将filter路径转换为在项目中的实际路径
+        const filterPath = deleteFilter.path.replace(/^\/+/, ''); // 移除开头的斜杠
+        const targetPath = path.join(projectPath, filterPath);
+        
+        if (fs.existsSync(targetPath)) {
+          try {
+            await fs.remove(targetPath);
+            console.log(`已删除项目中的文件/目录: ${targetPath}`);
+          } catch (error) {
+            console.error(`删除文件/目录失败 ${targetPath}: ${error.message}`);
+          }
+        } else {
+          console.log(`项目中不存在要删除的文件/目录: ${targetPath}`);
+        }
+      }
+    }
+    
+    let copiedFiles = 0;
 
-    // 遍历jcr_root中的所有文件和目录
+    // 遍历jcr_root中的所有文件和目录，只处理复制操作
     const allItems = getAllFilesRecursive(jcrRootPath);
     
     for (const sourcePath of allItems) {
       // 获取相对于jcr_root的路径
       const relativePath = path.relative(jcrRootPath, sourcePath);
       
-      // 检查该路径是否匹配任何filter规则
-      const matchingFilter = getMatchingFilter(relativePath, parsedFilters);
+      // 检查该路径是否匹配任何filter规则（只考虑复制操作）
+      const matchingFilter = getMatchingFilter(relativePath, copyFilters);
       
       if (matchingFilter) {
         // 构建目标路径
         const destinationPath = path.join(projectPath, relativePath);
         
         try {
-          if (matchingFilter.type === 'deleted') {
-            // 删除操作：删除项目中对应的文件或目录
-            if (fs.existsSync(destinationPath)) {
-              await fs.remove(destinationPath);
-              console.log(`已删除项目中的文件/目录: ${destinationPath}`);
-            } else {
-              console.log(`项目中不存在要删除的文件/目录: ${destinationPath}`);
-            }
-          } else {
-            // 复制操作：确保目标目录存在
-            await fs.ensureDir(path.dirname(destinationPath));
-            
-            // 删除目标路径中已存在的文件或目录
-            if (fs.existsSync(destinationPath)) {
-              await fs.remove(destinationPath);
-            }
-            
-            // 复制文件或目录
-            await fs.copy(sourcePath, destinationPath);
-            
-            copiedFiles++;
-            console.log(`已复制 ${sourcePath} 到 ${destinationPath}`);
+          // 复制操作：确保目标目录存在
+          await fs.ensureDir(path.dirname(destinationPath));
+          
+          // 删除目标路径中已存在的文件或目录
+          if (fs.existsSync(destinationPath)) {
+            await fs.remove(destinationPath);
           }
+          
+          // 复制文件或目录
+          await fs.copy(sourcePath, destinationPath);
+          
+          copiedFiles++;
+          console.log(`已复制 ${sourcePath} 到 ${destinationPath}`);
         } catch (error) {
-          console.error(`${matchingFilter.type === 'deleted' ? '删除' : '复制'}文件失败 ${sourcePath}: ${error.message}`);
+          console.error(`复制文件失败 ${sourcePath}: ${error.message}`);
         }
       }
     }
