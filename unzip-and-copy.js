@@ -62,10 +62,15 @@ function parseFilterItem(filterItem) {
  */
 function getMatchingFilter(filePath, filters) {
  
+  // 将路径标准化为 POSIX 格式（使用 / 作为分隔符）进行比较
+  const normalizedFilePath = filePath.replace(/\\/g, '/');
+  
   for (const filter of filters) {
     const filterPath = filter.path.replace(/^\/+/, '');
-    if (filePath === filterPath || 
-        filePath.startsWith(filterPath + '/')) {
+    const normalizedFilterPath = filterPath.replace(/\\/g, '/');
+    
+    if (normalizedFilePath === normalizedFilterPath || 
+        normalizedFilePath.startsWith(normalizedFilterPath + '/')) {
       return filter;
     }
   }
@@ -83,19 +88,23 @@ function getMatchingFilter(filePath, filters) {
  * @param {boolean} cleanupAfter - 是否在完成后删除解压的文件，默认为true
  */
 async function unzipAndCopyByFilter(zipFilePath, projectPath, filterPaths, cleanupAfter = true) {
+  // 标准化输入路径
+  const normalizedZipFilePath = zipFilePath.replace(/\\/g, '/');
+  const normalizedProjectPath = projectPath.replace(/\\/g, '/');
+  
   // 创建临时目录用于解压
-  const tempExtractPath = path.join(path.dirname(zipFilePath), `temp_extract_${Date.now()}`);
+  const tempExtractPath = path.join(path.dirname(normalizedZipFilePath), `temp_extract_${Date.now()}`);
   
   try {
     // 检查ZIP文件是否存在
-    if (!fs.existsSync(zipFilePath)) {
-      console.error(`错误: ZIP文件不存在 - ${zipFilePath}`);
+    if (!fs.existsSync(normalizedZipFilePath)) {
+      console.error(`错误: ZIP文件不存在 - ${normalizedZipFilePath}`);
       return false;
     }
 
     // 检查项目路径是否存在
-    if (!fs.existsSync(projectPath)) {
-      console.error(`错误: 项目路径不存在 - ${projectPath}`);
+    if (!fs.existsSync(normalizedProjectPath)) {
+      console.error(`错误: 项目路径不存在 - ${normalizedProjectPath}`);
       return false;
     }
 
@@ -103,7 +112,7 @@ async function unzipAndCopyByFilter(zipFilePath, projectPath, filterPaths, clean
     fs.ensureDirSync(tempExtractPath);
 
     // 使用adm-zip解压到临时目录
-    const zip = new AdmZip(zipFilePath);
+    const zip = new AdmZip(normalizedZipFilePath);
     zip.extractAllTo(tempExtractPath, true); // true表示覆盖已存在的文件
 
     // 查找jcr_root目录
@@ -126,7 +135,9 @@ async function unzipAndCopyByFilter(zipFilePath, projectPath, filterPaths, clean
       for (const deleteFilter of deleteFilters) {
         // 将filter路径转换为在项目中的实际路径
         const filterPath = deleteFilter.path.replace(/^\/+/, ''); // 移除开头的斜杠
-        const targetPath = path.join(projectPath, filterPath);
+        // 标准化路径分隔符
+        const normalizedFilterPath = filterPath.replace(/\\/g, '/');
+        const targetPath = path.join(normalizedProjectPath, normalizedFilterPath);
         
         if (fs.existsSync(targetPath)) {
           try {
@@ -155,7 +166,7 @@ async function unzipAndCopyByFilter(zipFilePath, projectPath, filterPaths, clean
       
       if (matchingFilter) {
         // 构建目标路径
-        const destinationPath = path.join(projectPath, relativePath);
+        const destinationPath = path.join(normalizedProjectPath, relativePath);
         
         try {
           // 复制操作：确保目标目录存在
@@ -177,7 +188,7 @@ async function unzipAndCopyByFilter(zipFilePath, projectPath, filterPaths, clean
       }
     }
 
-    console.log(`成功复制 ${copiedFiles} 个文件从 ${zipFilePath} 的jcr_root目录到项目路径 ${projectPath}`);
+    console.log(`成功复制 ${copiedFiles} 个文件从 ${normalizedZipFilePath} 的jcr_root目录到项目路径 ${normalizedProjectPath}`);
     
     // 根据参数决定是否删除解压的文件
     if (cleanupAfter) {
