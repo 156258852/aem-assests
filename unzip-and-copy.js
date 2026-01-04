@@ -41,9 +41,23 @@ function parsePath(path) {
  * @returns {Object} 解析后的路径和操作类型 {path: string, type: string}
  */
 function parseFilterItem(filterItem) {
-  // 标准化为数组格式
-  const [path, options = {}] = normalizeFilterItem(filterItem);
-  const { type = 'copy' } = options;
+  let path, options = {};
+  let type = 'copy';
+  
+  // 检查是否为数组格式
+  if (Array.isArray(filterItem)) {
+    [path, options = {}] = filterItem;
+    type = options.type || 'copy';
+  } else {
+    // 检查字符串是否以删除前缀开头
+    if (typeof filterItem === 'string' && filterItem.startsWith('!')) {
+      path = filterItem.substring(1); // 移除前缀
+      type = 'deleted';
+    } else {
+      path = filterItem;
+      type = 'copy';
+    }
+  }
   
   // 解析路径
   const parsedPath = parsePath(path);
@@ -123,8 +137,14 @@ async function unzipAndCopyByFilter(zipFilePath, projectPath, filterPaths, clean
       return false;
     }
 
+    // 如果filterPaths是字符串，则按换行符分割
+    let normalizedFilterPaths = filterPaths;
+    if (typeof filterPaths === 'string') {
+      normalizedFilterPaths = filterPaths.split(/\n+/).filter(path => path.trim() !== '');
+    }
+      
     // 解析所有filter路径
-    const parsedFilters = filterPaths.map(parseFilterItem);
+    const parsedFilters = normalizedFilterPaths.map(parseFilterItem);
     
     // 分离复制和删除操作的filter
     const copyFilters = parsedFilters.filter(filter => filter.type !== 'deleted');
